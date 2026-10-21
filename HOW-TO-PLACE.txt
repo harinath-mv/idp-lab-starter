@@ -1,0 +1,31 @@
+WHERE TO PUT THESE FILES
+========================
+
+1. Clone your GitHub repo (the Day 6 repo) next to auth-identity-lab:
+     cd ~/OneDrive/Documents
+     git clone https://github.com/<your-github-name>/<your-repo>.git
+
+2. Copy these 3 folders from this zip INTO your repo folder (top level):
+     infra/      -> Terraform for AWS (Day 7 starting point)
+     .github/    -> GitHub Actions workflow (Day 7 version, before Day 8 gates)
+     port/       -> Terraform for Port blueprints (Day 11, today)
+
+   Result:
+     Documents/
+       auth-identity-lab/     (Week 1 lab - do not put these files here)
+       <your-repo>/
+         .github/workflows/terraform.yml
+         infra/modules/s3-bucket/...
+         infra/envs/dev/...
+         infra/envs/prod/...
+         port/versions.tf
+         port/blueprints.tf
+
+3. Add the 4 lines from gitignore-add.txt to the end of <your-repo>/.gitignore
+   (create the file if it does not exist).
+
+4. Replace 111122223333 with YOUR 12-digit AWS account ID in:
+     infra/envs/dev/backend.tf
+     infra/envs/prod/backend.tf
+
+Day 8 and Day 9 changes are made step by step from the Day 8 & Day 9 guide.
