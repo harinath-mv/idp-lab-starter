@@ -26,7 +26,40 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  gates:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tflint
+        uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: v0.59.1
+
+      - name: tflint init (downloads the AWS rules)
+        run: tflint --init
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: tflint (code quality)
+        run: tflint --recursive --config "$PWD/.tflint.hcl" --format compact
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Checkov
+        run: pip install checkov
+
+      - name: Checkov (security and compliance)
+        run: checkov -d . --framework terraform --compact --quiet
+
   plan:
+    needs: gates
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     strategy:
@@ -129,5 +162,3 @@ jobs:
       - run: terraform plan -input=false -out=tfplan
       - run: terraform apply -input=false tfplan
       - run: terraform output
-
-      
