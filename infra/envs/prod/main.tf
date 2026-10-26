@@ -11,8 +11,7 @@ provider "aws" {
 }
 
 module "app_bucket" {
-  source     = "../../modules/s3-bucket"
-  env        = "prod"
-  purpose    = "app-data"
-  versioning = true
+  source  = "../../modules/s3-bucket"
+  env     = "prod"
+  purpose = "app-data"
 }
