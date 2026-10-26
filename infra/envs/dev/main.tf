@@ -6,6 +6,7 @@ provider "aws" {
       project    = "idp-lab"
       env        = "dev"
       managed_by = "terraform"
+      owner      = "hari"
     }
   }
 }
