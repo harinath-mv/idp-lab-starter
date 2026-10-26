@@ -6,6 +6,10 @@ locals {
 }
 
 resource "aws_s3_bucket" "this" {
+  #checkov:skip=CKV_AWS_18:Lab bucket - no separate access-log bucket yet (cost and noise)
+  #checkov:skip=CKV_AWS_144:Lab bucket - cross-region replication not needed, doubles cost
+  #checkov:skip=CKV_AWS_145:SSE-S3 default encryption is enough for lab data; KMS key costs USD 1 per month
+  #checkov:skip=CKV2_AWS_62:No system consumes bucket events yet
   bucket        = local.bucket_name
   force_destroy = var.force_destroy
 }
@@ -13,7 +17,7 @@ resource "aws_s3_bucket" "this" {
 resource "aws_s3_bucket_versioning" "this" {
   bucket = aws_s3_bucket.this.id
   versioning_configuration {
-    status = var.versioning ? "Enabled" : "Suspended"
+    status = "Enabled"
   }
 }
 
@@ -23,4 +27,23 @@ resource "aws_s3_bucket_public_access_block" "this" {
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "this" {
+  bucket = aws_s3_bucket.this.id
+
+  rule {
+    id     = "tidy-old-versions"
+    status = "Enabled"
+
+    filter {}
+
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
 }
