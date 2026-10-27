@@ -17,9 +17,10 @@ on:
         type: string
         default: "unknown"
       run_id:
-        description: "Port run ID"
-        required: true
+        description: "Port action run ID (empty when started by a Port Workflow)"
+        required: false
         type: string
+        default: ""
 
 permissions:
   id-token: write
