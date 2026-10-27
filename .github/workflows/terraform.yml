@@ -68,34 +68,18 @@ jobs:
         working-directory: infra/envs/${{ matrix.env }}
     steps:
       - uses: actions/checkout@v4
-
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-          terraform_wrapper: false
-
-      - name: Log in to AWS with OIDC (read-only plan role)
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: ./.github/actions/terraform-setup
         with:
           role-to-assume: ${{ vars.TF_PLAN_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Who am I?
-        run: aws sts get-caller-identity
-
+          working-directory: infra/envs/${{ matrix.env }}
+          terraform-version: ${{ env.TF_VERSION }}
       - name: Format check
         run: terraform fmt -check -recursive
         working-directory: infra
-
-      - name: Init
-        run: terraform init -input=false
-
       - name: Validate
         run: terraform validate
-
       - name: Plan
         run: terraform plan -input=false -no-color -out=tfplan | tee plan.txt
-
       - name: Post plan on the PR
         uses: actions/github-script@v7
         env:
@@ -123,16 +107,11 @@ jobs:
         working-directory: infra/envs/dev
     steps:
       - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-          terraform_wrapper: false
-      - name: Log in to AWS with OIDC (apply role)
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: ./.github/actions/terraform-setup
         with:
           role-to-assume: ${{ vars.TF_APPLY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-      - run: terraform init -input=false
+          working-directory: infra/envs/dev
+          terraform-version: ${{ env.TF_VERSION }}
       - run: terraform plan -input=false -out=tfplan
       - run: terraform apply -input=false tfplan
       - run: terraform output
@@ -146,16 +125,11 @@ jobs:
         working-directory: infra/envs/prod
     steps:
       - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-          terraform_wrapper: false
-      - name: Log in to AWS with OIDC (apply role)
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: ./.github/actions/terraform-setup
         with:
           role-to-assume: ${{ vars.TF_APPLY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-      - run: terraform init -input=false
+          working-directory: infra/envs/prod
+          terraform-version: ${{ env.TF_VERSION }}
       - run: terraform plan -input=false -out=tfplan
       - run: terraform apply -input=false tfplan
       - run: terraform output
