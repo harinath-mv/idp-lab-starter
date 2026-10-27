@@ -52,7 +52,8 @@ jobs:
 
       - name: Tell the developer we started
         working-directory: scripts/port-api
-        run: python port_run.py log "Request received: $TF_VAR_env bucket for '$TF_VAR_purpose' (by $TF_VAR_requested_by)"
+        run: |
+          python port_run.py log "Request received - $TF_VAR_env bucket for '$TF_VAR_purpose' (by $TF_VAR_requested_by)"
 
       - name: Guardrail - validate the request again
         run: |
