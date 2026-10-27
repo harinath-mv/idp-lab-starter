@@ -1,0 +1,41 @@
+name: terraform-setup
+description: "Platform standard: install Terraform, log in to AWS with OIDC, run terraform init"
+
+inputs:
+  role-to-assume:
+    description: "IAM role ARN to assume with OIDC"
+    required: true
+  working-directory:
+    description: "Folder that holds the Terraform code"
+    required: true
+  aws-region:
+    description: "AWS region"
+    required: false
+    default: "ap-south-1"
+  terraform-version:
+    description: "Terraform version"
+    required: false
+    default: "1.13.3"
+
+runs:
+  using: composite
+  steps:
+    - uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ inputs.terraform-version }}
+        terraform_wrapper: false
+
+    - name: Log in to AWS with OIDC
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ inputs.role-to-assume }}
+        aws-region: ${{ inputs.aws-region }}
+
+    - name: Who am I?
+      shell: bash
+      run: aws sts get-caller-identity --query Arn --output text
+
+    - name: Terraform init
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: terraform init -input=false

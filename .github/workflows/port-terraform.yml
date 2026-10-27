@@ -5,15 +5,14 @@ on:
     branches: [main]
   push:
     branches: [main]
-    paths: ["port/**", ".github/workflows/port-terraform.yml"]
+    paths: ["port/**", ".github/workflows/port-terraform.yml", ".github/actions/terraform-setup/**"]
 
 permissions:
-  id-token: write      # OIDC login to AWS for the state file (Day 5)
+  id-token: write
   contents: read
-  pull-requests: write # post the plan on the PR
+  pull-requests: write
 
 env:
-  AWS_REGION: ap-south-1
   TF_VERSION: 1.13.3
   PORT_CLIENT_ID: ${{ secrets.PORT_CLIENT_ID }}
   PORT_CLIENT_SECRET: ${{ secrets.PORT_CLIENT_SECRET }}
@@ -31,17 +30,12 @@ jobs:
         working-directory: port
     steps:
       - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-          terraform_wrapper: false
-      - name: Log in to AWS with OIDC (read-only plan role)
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: ./.github/actions/terraform-setup
         with:
           role-to-assume: ${{ vars.TF_PLAN_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+          working-directory: port
+          terraform-version: ${{ env.TF_VERSION }}
       - run: terraform fmt -check
-      - run: terraform init -input=false
       - run: terraform validate
       - name: Plan
         run: terraform plan -input=false -no-color | tee plan.txt
@@ -68,15 +62,10 @@ jobs:
         working-directory: port
     steps:
       - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-          terraform_wrapper: false
-      - name: Log in to AWS with OIDC (apply role)
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: ./.github/actions/terraform-setup
         with:
           role-to-assume: ${{ vars.TF_APPLY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-      - run: terraform init -input=false
+          working-directory: port
+          terraform-version: ${{ env.TF_VERSION }}
       - run: terraform plan -input=false -out=tfplan
       - run: terraform apply -input=false tfplan
