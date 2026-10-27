@@ -1,0 +1,34 @@
+name: port-hello
+
+on:
+  workflow_dispatch:
+    inputs:
+      message:
+        description: "Message typed in the Port form"
+        required: true
+        type: string
+      entity:
+        description: "Repo the action was run on"
+        required: true
+        type: string
+      run_id:
+        description: "Port run ID"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  hello:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Say hello from Port
+        env:
+          MESSAGE: ${{ inputs.message }}
+          ENTITY: ${{ inputs.entity }}
+          RUN_ID: ${{ inputs.run_id }}
+        run: |
+          echo "Port run : $RUN_ID"
+          echo "Repo     : $ENTITY"
+          echo "Message  : $MESSAGE"
