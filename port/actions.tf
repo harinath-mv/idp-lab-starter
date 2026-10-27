@@ -1,4 +1,4 @@
-# Shared value: the GitHub Ocean integration both actions run through (found on Day 14)
+# Shared value: the GitHub Ocean integration all actions run through (found on Day 14)
 locals {
   github_installation_id = "github-ocean"
 }
@@ -75,6 +75,53 @@ resource "port_action" "repo_health_check" {
         days   = "{{ .inputs.days }}"
         entity = "{{ .entity.identifier }}"
         run_id = "{{ .run.id }}"
+      })
+    }
+  }
+}
+
+# Day 17: developers request a bucket; the platform builds it with Terraform
+resource "port_action" "create_s3_bucket" {
+  identifier  = "create_s3_bucket"
+  title       = "Create S3 bucket"
+  icon        = "AWS"
+  description = "Get a secure, versioned S3 bucket in dev or prod, built by the platform Terraform module"
+
+  self_service_trigger = {
+    operation            = "CREATE"
+    blueprint_identifier = port_blueprint.s3_bucket.identifier
+    user_properties = {
+      string_props = {
+        purpose = {
+          title       = "Purpose"
+          description = "3-20 lowercase letters, numbers or dashes, e.g. orders-data"
+          required    = true
+          pattern     = "^[a-z0-9-]{3,20}$"
+        }
+        environment = {
+          title    = "Environment"
+          required = true
+          enum     = ["dev", "prod"]
+          default  = "dev"
+        }
+      }
+    }
+    order_properties = ["purpose", "environment"]
+  }
+
+  integration_method = {
+    installation_id         = local.github_installation_id
+    integration_action_type = "dispatch_workflow"
+    integration_action_execution_properties = {
+      org                    = "harinath-mv"
+      repo                   = "idp-lab-starter"
+      workflow               = "create-s3-bucket.yml"
+      report_workflow_status = "true"
+      workflow_inputs = jsonencode({
+        purpose      = "{{ .inputs.purpose }}"
+        env          = "{{ .inputs.environment }}"
+        requested_by = "{{ .trigger.by.user.email }}"
+        run_id       = "{{ .run.id }}"
       })
     }
   }

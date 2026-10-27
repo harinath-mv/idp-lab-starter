@@ -212,3 +212,44 @@ resource "port_blueprint" "deployment" {
     }
   }
 }
+
+# Day 17: what a self-service S3 bucket looks like in the catalog
+resource "port_blueprint" "s3_bucket" {
+  identifier = "s3Bucket"
+  title      = "S3 Bucket"
+  icon       = "AWS"
+
+  properties = {
+    string_props = {
+      bucket_name = {
+        title = "Bucket name"
+      }
+      environment = {
+        title = "Environment"
+        enum  = ["dev", "prod"]
+      }
+      region = {
+        title = "Region"
+      }
+      purpose = {
+        title = "Purpose"
+      }
+      requested_by = {
+        title = "Requested by"
+      }
+      console_url = {
+        title  = "AWS console"
+        format = "url"
+      }
+    }
+  }
+
+  relations = {
+    service = {
+      title    = "Service"
+      target   = port_blueprint.service.identifier
+      required = false
+      many     = false
+    }
+  }
+}

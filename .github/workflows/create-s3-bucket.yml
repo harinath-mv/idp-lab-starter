@@ -1,0 +1,97 @@
+name: create-s3-bucket
+
+on:
+  workflow_dispatch:
+    inputs:
+      purpose:
+        description: "What the bucket is for"
+        required: true
+        type: string
+      env:
+        description: "dev or prod"
+        required: true
+        type: string
+      requested_by:
+        description: "Who asked (from Port)"
+        required: false
+        type: string
+        default: "unknown"
+      run_id:
+        description: "Port run ID"
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: self-service-s3-${{ inputs.env }}-${{ inputs.purpose }}
+  cancel-in-progress: false
+
+jobs:
+  create:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ inputs.env }}
+    env:
+      PORT_CLIENT_ID: ${{ secrets.PORT_CLIENT_ID }}
+      PORT_CLIENT_SECRET: ${{ secrets.PORT_CLIENT_SECRET }}
+      RUN_ID: ${{ inputs.run_id }}
+      AWS_REGION: ap-south-1
+      TF_VAR_env: ${{ inputs.env }}
+      TF_VAR_purpose: ${{ inputs.purpose }}
+      TF_VAR_requested_by: ${{ inputs.requested_by }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+
+      - name: Tell the developer we started
+        working-directory: scripts/port-api
+        run: python port_run.py log "Request received: $TF_VAR_env bucket for '$TF_VAR_purpose' (by $TF_VAR_requested_by)"
+
+      - name: Guardrail - validate the request again
+        run: |
+          if [[ ! "$TF_VAR_env" =~ ^(dev|prod)$ ]]; then echo "::error::env must be dev or prod"; exit 1; fi
+          if [[ ! "$TF_VAR_purpose" =~ ^[a-z0-9-]{3,20}$ ]]; then echo "::error::purpose must be 3-20 lowercase letters, numbers or dashes"; exit 1; fi
+
+      - uses: ./.github/actions/terraform-setup
+        with:
+          role-to-assume: ${{ vars.TF_APPLY_ROLE_ARN }}
+          working-directory: infra/self-service/s3
+          backend-key: self-service/s3/${{ inputs.env }}-${{ inputs.purpose }}.tfstate
+
+      - name: Plan
+        working-directory: infra/self-service/s3
+        run: terraform plan -input=false -out=tfplan
+
+      - name: Tell the developer the plan is ready
+        working-directory: scripts/port-api
+        run: python port_run.py log "Plan ready. Creating the bucket now..."
+
+      - name: Apply
+        working-directory: infra/self-service/s3
+        run: |
+          terraform apply -input=false tfplan
+          echo "BUCKET_NAME=$(terraform output -raw bucket_name)" >> "$GITHUB_ENV"
+
+      - name: Register in the Port catalog
+        working-directory: scripts/port-api
+        run: python register_bucket.py
+
+      - name: Summary for the developer
+        working-directory: scripts/port-api
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python port_run.py summary "Bucket $BUCKET_NAME is ready in $TF_VAR_env"
+          python port_run.py link "$RUN_URL"
+
+      - name: Tell the developer it failed
+        if: failure()
+        working-directory: scripts/port-api
+        run: python port_run.py log "Request FAILED. Open the linked GitHub run, or ask in #platform-help with this run ID."

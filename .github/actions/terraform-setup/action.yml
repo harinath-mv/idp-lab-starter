@@ -16,6 +16,10 @@ inputs:
     description: "Terraform version"
     required: false
     default: "1.13.3"
+  backend-key:
+    description: "Optional state file path in the S3 backend (used by self-service requests)"
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -38,4 +42,11 @@ runs:
     - name: Terraform init
       shell: bash
       working-directory: ${{ inputs.working-directory }}
-      run: terraform init -input=false
+      env:
+        BACKEND_KEY: ${{ inputs.backend-key }}
+      run: |
+        if [ -n "$BACKEND_KEY" ]; then
+          terraform init -input=false -backend-config="key=$BACKEND_KEY"
+        else
+          terraform init -input=false
+        fi
