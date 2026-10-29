@@ -1,0 +1,43 @@
+name: github-webhook-ci
+
+# Runs the Day 18 receiver's quality gates whenever its code changes.
+on:
+  pull_request:
+    paths:
+      - "integrations/github-webhook/**"
+      - ".github/workflows/github-webhook-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "integrations/github-webhook/**"
+      - ".github/workflows/github-webhook-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: integrations/github-webhook
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: integrations/github-webhook/requirements.txt
+
+      - name: Install
+        run: pip install -r requirements.txt
+
+      - name: Lint (ruff)
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: Tests (pytest)
+        run: python -m pytest -v
