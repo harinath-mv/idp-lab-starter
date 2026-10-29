@@ -1,0 +1,14 @@
+{
+  "action": "opened",
+  "number": 42,
+  "pull_request": {
+    "number": 42,
+    "title": "Add orders-data bucket (café)",
+    "state": "open",
+    "html_url": "https://github.com/harinath-mv/idp-lab-starter/pull/42",
+    "merged": false,
+    "user": { "login": "harinath-mv" }
+  },
+  "repository": { "full_name": "harinath-mv/idp-lab-starter" },
+  "sender": { "login": "harinath-mv" }
+}
