@@ -1,0 +1,9 @@
+# Keep the image small and free of secrets: only what the Dockerfile COPYs is needed
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.env
+tests/
+tools/
+*.md
