@@ -8,6 +8,12 @@ locals {
   lab_developer_email = "REPLACE-with-your-day18-developer-email"
 }
 
+# One-time: adopt the existing "payments" team into Terraform state (remove after apply)
+import {
+  to = port_team.payments
+  id = "payments"
+}
+
 resource "port_team" "payments" {
   name        = "payments"
   description = "Payments developers (Day 19 lab)"
