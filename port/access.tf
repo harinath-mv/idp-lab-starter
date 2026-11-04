@@ -1,4 +1,4 @@
-# who can do what in Port, defined as code.
+# Day 18 (Part 2): who can do what in Port, defined as code.
 #
 # Roles in Port:  Admin  = platform team (builds the portal)
 #                 Member = developers (use the portal)
@@ -70,13 +70,15 @@ resource "port_action" "change_service_criticality" {
   }
 }
 
+# Day 19: only the team that OWNS the service can ask to change it (Admins always can).
 resource "port_action_permissions" "change_service_criticality" {
   action_identifier = port_action.change_service_criticality.identifier
   permissions = {
     execute = {
-      roles = ["Admin", "Member"]
-      users = []
-      teams = []
+      roles         = ["Admin"]
+      users         = []
+      teams         = []
+      owned_by_team = true
     }
     approve = {
       roles = ["Admin"]
