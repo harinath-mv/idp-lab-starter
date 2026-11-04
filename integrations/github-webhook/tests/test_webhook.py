@@ -19,8 +19,10 @@ def client(monkeypatch):
     return TestClient(app)
 
 
-def send(client, body: bytes, event: str = "pull_request", signature: str | None = "auto"):
-    headers = {"X-GitHub-Event": event, "X-GitHub-Delivery": "test-delivery-1", "Content-Type": "application/json"}
+def send(
+    client, body: bytes, event: str = "pull_request", signature: str | None = "auto", delivery: str = "test-delivery-1"
+):
+    headers = {"X-GitHub-Event": event, "X-GitHub-Delivery": delivery, "Content-Type": "application/json"}
     if signature == "auto":
         signature = expected_signature(SECRET, body)
     if signature is not None:
@@ -29,7 +31,7 @@ def send(client, body: bytes, event: str = "pull_request", signature: str | None
 
 
 def test_health(client):
-    assert client.get("/healthz").json() == {"status": "ok"}
+    assert client.get("/healthz").json()["status"] == "ok"
 
 
 def test_valid_signature_is_accepted_and_parsed(client):

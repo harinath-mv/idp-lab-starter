@@ -1,8 +1,11 @@
-"""Day 18: GitHub webhook receiver.
+"""GitHub webhook receiver.
+
+Day 18: signature check (401 for anything not signed by GitHub).
+Day 19: duplicate-delivery guard (X-GitHub-Delivery) after the signature check.
 
 Endpoints
   GET  /healthz           -> is the service up?
-  POST /webhooks/github   -> receives GitHub events, rejects anything not signed by GitHub
+  POST /webhooks/github   -> receives GitHub events
 """
 
 import logging
@@ -11,18 +14,57 @@ from fastapi import FastAPI, Header, HTTPException, Request
 from pydantic import ValidationError
 
 from app.config import get_settings
+from app.dedupe import DeliveryDeduper
 from app.models import PullRequestEvent
 from app.security import is_valid_signature
 
-logging.basicConfig(level=get_settings().log_level, format="%(asctime)s %(levelname)s %(message)s")
+_settings = get_settings()
+logging.basicConfig(level=_settings.log_level, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("github-webhook")
 
-app = FastAPI(title="github-webhook", version="0.1.0")
+app = FastAPI(title="github-webhook", version="0.2.0")
+deduper = DeliveryDeduper(ttl_seconds=_settings.dedupe_ttl_seconds, max_entries=_settings.dedupe_max_entries)
 
 
 @app.get("/healthz")
 def healthz() -> dict:
-    return {"status": "ok"}
+    return {"status": "ok", "remembered_deliveries": len(deduper)}
+
+
+def process_event(event_type: str, delivery_id: str, body: bytes) -> dict:
+    """Do the real work for one verified, first-time delivery."""
+    if event_type == "ping":
+        log.info("Ping received (delivery %s)", delivery_id)
+        return {"ok": True, "event": "ping", "message": "pong"}
+
+    if event_type == "pull_request":
+        try:
+            event = PullRequestEvent.model_validate_json(body)
+        except ValidationError as err:
+            log.warning("Delivery %s: payload did not match the model: %s", delivery_id, err.errors()[:2])
+            raise HTTPException(status_code=422, detail="unexpected pull_request payload") from err
+
+        pr = event.pull_request
+        log.info(
+            "PR #%s %s in %s by %s: %s",
+            pr.number,
+            event.action,
+            event.repository.full_name,
+            pr.user.login,
+            pr.title,
+        )
+        # Weekend: PortClient(...).upsert_entity(...) goes here (Day 19 built the retrying client).
+        return {
+            "ok": True,
+            "event": "pull_request",
+            "action": event.action,
+            "repo": event.repository.full_name,
+            "number": pr.number,
+            "title": pr.title,
+        }
+
+    log.info("Ignored event '%s' (delivery %s)", event_type, delivery_id)
+    return {"ok": True, "event": event_type, "ignored": True}
 
 
 @app.post("/webhooks/github", status_code=200)
@@ -45,37 +87,13 @@ async def github_webhook(
         log.warning("Rejected delivery %s: bad or missing signature", x_github_delivery)
         raise HTTPException(status_code=401, detail="invalid signature")
 
-    # 3. Only now do we trust the content.
-    if x_github_event == "ping":
-        log.info("Ping received (delivery %s)", x_github_delivery)
-        return {"ok": True, "event": "ping", "message": "pong"}
+    # 3. Day 19: skip deliveries we already processed. AFTER the signature check,
+    #    so nobody can fill our memory with fake IDs.
+    if deduper.already_processed(x_github_delivery):
+        log.info("Duplicate delivery %s skipped", x_github_delivery)
+        return {"ok": True, "duplicate": True, "delivery": x_github_delivery}
 
-    if x_github_event == "pull_request":
-        try:
-            event = PullRequestEvent.model_validate_json(body)
-        except ValidationError as err:
-            log.warning("Delivery %s: payload did not match the model: %s", x_github_delivery, err.errors()[:2])
-            raise HTTPException(status_code=422, detail="unexpected pull_request payload") from err
-
-        pr = event.pull_request
-        log.info(
-            "PR #%s %s in %s by %s: %s",
-            pr.number,
-            event.action,
-            event.repository.full_name,
-            pr.user.login,
-            pr.title,
-        )
-        # Day 20/weekend: this is where we will upsert the PR into the Port catalog.
-        return {
-            "ok": True,
-            "event": "pull_request",
-            "action": event.action,
-            "repo": event.repository.full_name,
-            "number": pr.number,
-            "title": pr.title,
-        }
-
-    # Signed, but an event type we do not handle yet: accept it so GitHub does not mark it failed.
-    log.info("Ignored event '%s' (delivery %s)", x_github_event, x_github_delivery)
-    return {"ok": True, "event": x_github_event, "ignored": True}
+    # 4. Do the work. Remember the ID only if it succeeded, so a failed event can be redelivered.
+    result = process_event(x_github_event, x_github_delivery, body)
+    deduper.mark_processed(x_github_delivery)
+    return result
