@@ -1,0 +1,4 @@
+# Development + CI: runtime plus test and lint tools (not shipped in the container)
+-r requirements.txt
+pytest>=8.0
+ruff>=0.5

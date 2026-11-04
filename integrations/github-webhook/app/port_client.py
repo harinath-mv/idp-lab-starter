@@ -4,12 +4,13 @@
 - Retries temporary failures: 429 (honours Retry-After), 5xx, network errors.
 - Refreshes the token once on 401.
 - Fails fast on mistakes that a retry cannot fix (400, 403, 404, 422).
+- Day 20: reads long lists page by page (pagination).
 """
 
 import logging
 import random
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from email.utils import parsedate_to_datetime
 
 import httpx
@@ -153,3 +154,22 @@ class PortClient:
             "POST", f"/blueprints/{blueprint}/entities", params={"upsert": "true", "merge": "true"}, json=entity
         )
         return resp.json()
+
+    def search_entities(self, blueprint: str, page_size: int = 100, max_pages: int = 1000) -> Iterator[dict]:
+        """Day 20: yield every entity of a blueprint, one page at a time.
+
+        Port returns at most `page_size` entities per call plus a `next` token.
+        We send that token back as `from` until there is no `next` left.
+        `max_pages` is a safety stop, so a bug can never loop forever.
+        """
+        token: str | None = None
+        for _ in range(max_pages):
+            body: dict = {"limit": page_size}
+            if token:
+                body["from"] = token
+            data = self._send("POST", f"/blueprints/{blueprint}/entities/search", json=body).json()
+            yield from data.get("entities", [])
+            token = data.get("next")
+            if not token:
+                return
+        raise PortApiError(f"stopped after {max_pages} pages of {blueprint}; is the next token stuck?")

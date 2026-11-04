@@ -1,15 +1,17 @@
 name: github-webhook-ci
 
-# Runs the Day 18 receiver's quality gates whenever its code changes.
+# Quality gates for the webhook receivers (Python + TypeScript) whenever their code changes.
 on:
   pull_request:
     paths:
       - "integrations/github-webhook/**"
+      - "integrations/github-webhook-ts/**"
       - ".github/workflows/github-webhook-ci.yml"
   push:
     branches: [main]
     paths:
       - "integrations/github-webhook/**"
+      - "integrations/github-webhook-ts/**"
       - ".github/workflows/github-webhook-ci.yml"
 
 permissions:
@@ -17,6 +19,7 @@ permissions:
 
 jobs:
   test:
+    name: python (ruff + pytest)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -29,10 +32,10 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: integrations/github-webhook/requirements.txt
+          cache-dependency-path: integrations/github-webhook/requirements-dev.txt
 
       - name: Install
-        run: pip install -r requirements.txt
+        run: pip install -r requirements-dev.txt
 
       - name: Lint (ruff)
         run: |
@@ -41,3 +44,58 @@ jobs:
 
       - name: Tests (pytest)
         run: python -m pytest -v
+
+  container:
+    name: docker (build + run + signed request)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t github-webhook:ci integrations/github-webhook
+
+      - name: Run the container and test it from outside
+        run: |
+          docker run -d --name hook -p 8000:8000 -e GITHUB_WEBHOOK_SECRET=ci-secret github-webhook:ci
+          for i in $(seq 1 30); do curl -fs http://127.0.0.1:8000/healthz && break; sleep 1; done
+          echo
+          test "$(docker exec hook id -u)" = "10001" || { echo "::error::container runs as root"; exit 1; }
+          cd integrations/github-webhook
+          good=$(GITHUB_WEBHOOK_SECRET=ci-secret python3 tools/send_test_event.py); echo "$good"
+          bad=$(GITHUB_WEBHOOK_SECRET=ci-secret python3 tools/send_test_event.py --bad); echo "$bad"
+          [[ "$good" == 200* ]] || { echo "::error::signed event was not accepted"; exit 1; }
+          [[ "$bad" == 401* ]] || { echo "::error::badly signed event was not rejected"; exit 1; }
+
+      - name: Container logs (JSON)
+        if: always()
+        run: docker logs hook || true
+
+  typescript:
+    name: typescript (typecheck + test + build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: integrations/github-webhook-ts
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: integrations/github-webhook-ts/package-lock.json
+
+      - name: Install (exact versions from package-lock.json)
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
