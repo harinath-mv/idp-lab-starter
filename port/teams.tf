@@ -11,5 +11,5 @@ locals {
 resource "port_team" "payments" {
   name        = "payments"
   description = "Payments developers (Day 19 lab)"
-  users       = [local.lab_developer_email]
+  users       = ["the-day18-developer@example.com"]
 }
