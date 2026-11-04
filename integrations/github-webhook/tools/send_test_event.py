@@ -22,7 +22,11 @@ BODY = (Path(__file__).resolve().parent.parent / "tests" / "payloads" / "pull_re
 if not SECRET:
     sys.exit("Set GITHUB_WEBHOOK_SECRET first (same value the service uses).")
 
-headers = {"Content-Type": "application/json", "X-GitHub-Event": "pull_request", "X-GitHub-Delivery": "local-test-1"}
+headers = {
+    "Content-Type": "application/json",
+    "X-GitHub-Event": "pull_request",
+    "X-GitHub-Delivery": os.getenv("DELIVERY_ID", "local-test-1"),
+}
 if "--nosig" not in sys.argv:
     key = b"wrong-secret" if "--bad" in sys.argv else SECRET.encode()
     headers["X-Hub-Signature-256"] = "sha256=" + hmac.new(key, BODY, hashlib.sha256).hexdigest()
